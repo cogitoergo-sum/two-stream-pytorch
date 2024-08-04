@@ -8,7 +8,7 @@ import cv2
 
 
 def find_classes(dir):
-    classes = [d for d in os.listdir(dir) if os.path.isdir(os.path.join(dir, d))]
+    classes = [d for d in os.listdir(dir) if os.path.isdir(os.path.join(dir, d).replace("\\","/"))]
     classes.sort()
     class_to_idx = {classes[i]: i for i in range(len(classes))}
     return classes, class_to_idx
@@ -24,7 +24,7 @@ def make_dataset(root, source):
             data = split_f.readlines()
             for line in data:
                 line_info = line.split()
-                clip_path = os.path.join(root, line_info[0])
+                clip_path = os.path.join(root, line_info[0]).replace("\\","/")
                 duration = int(line_info[1])
                 target = int(line_info[2])
                 item = (clip_path, duration, target)
@@ -44,6 +44,7 @@ def ReadSegmentRGB(path, offsets, new_height, new_width, new_length, is_color, n
         for length_id in range(1, new_length+1):
             frame_name = name_pattern % (length_id + offset)
             frame_path = path + "/" + frame_name
+            frame_path=frame_path.replace("\\","/")
             cv_img_origin = cv2.imread(frame_path, cv_read_flag)
             if cv_img_origin is None:
                print("Could not load file %s" % (frame_path))

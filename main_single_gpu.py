@@ -22,9 +22,9 @@ model_names = sorted(name for name in models.__dict__
 dataset_names = sorted(name for name in datasets.__all__)
 
 parser = argparse.ArgumentParser(description='PyTorch Two-Stream Action Recognition')
-parser.add_argument('data', metavar='DIR',
+parser.add_argument('data', metavar='DIR',default="D:/optical_flow_frames/output_frames",
                     help='path to dataset')
-parser.add_argument('--settings', metavar='DIR', default='./datasets/settings',
+parser.add_argument('--settings', metavar='DIR', default="D:/optical_flow_frames/settings",
                     help='path to datset setting files')
 parser.add_argument('--modality', '-m', metavar='MODALITY', default='rgb',
                     choices=["rgb", "flow"],
@@ -131,9 +131,9 @@ def main():
 
     # data loading
     train_setting_file = "train_%s_split%d.txt" % (args.modality, args.split)
-    train_split_file = os.path.join(args.settings, args.dataset, train_setting_file)
+    train_split_file = os.path.join(args.settings, args.dataset, train_setting_file).replace("\\","/")
     val_setting_file = "val_%s_split%d.txt" % (args.modality, args.split)
-    val_split_file = os.path.join(args.settings, args.dataset, val_setting_file)
+    val_split_file = os.path.join(args.settings, args.dataset, val_setting_file).replace("\\","/")
     if not os.path.exists(train_split_file) or not os.path.exists(val_split_file):
         print("No split file exists in %s directory. Preprocess the dataset first" % (args.settings))
 
@@ -200,7 +200,7 @@ def main():
 
 def build_model():
 
-    model = models.__dict__[args.arch](pretrained=True, num_classes=101)
+    model = models.__dict__[args.arch](pretrained=True, num_classes=2)
     model.cuda()
     return model
 
@@ -219,19 +219,20 @@ def train(train_loader, model, criterion, optimizer, epoch):
 
     for i, (input, target) in enumerate(train_loader):
 
-        input = input.float().cuda(async=True)
-        target = target.cuda(async=True)
-        input_var = torch.autograd.Variable(input)
-        target_var = torch.autograd.Variable(target)
+        input = input.float().cuda(non_blocking=True)
+        target = target.cuda(non_blocking=True)
+        input_var = input
+        target_var = target
+
 
         output = model(input_var)
 
         # measure accuracy and record loss
-        prec1, prec3 = accuracy(output.data, target, topk=(1, 3))
-        acc_mini_batch += prec1[0]
+        prec1, prec3 = accuracy(output.data, target, topk=(1, 2))
+        acc_mini_batch += prec1.item()
         loss = criterion(output, target_var)
         loss = loss / args.iter_size
-        loss_mini_batch += loss.data[0]
+        loss_mini_batch += loss.item()
         loss.backward()
 
         if (i+1) % args.iter_size == 0:
@@ -267,20 +268,20 @@ def validate(val_loader, model, criterion):
 
     end = time.time()
     for i, (input, target) in enumerate(val_loader):
-        input = input.float().cuda(async=True)
-        target = target.cuda(async=True)
-        input_var = torch.autograd.Variable(input, volatile=True)
-        target_var = torch.autograd.Variable(target, volatile=True)
+        input = input.float().cuda(non_blocking=True)
+        target = target.cuda(non_blocking=True)
+        input_var = input
+        target_var = target
 
         # compute output
         output = model(input_var)
         loss = criterion(output, target_var)
 
         # measure accuracy and record loss
-        prec1, prec3 = accuracy(output.data, target, topk=(1, 3))
-        losses.update(loss.data[0], input.size(0))
-        top1.update(prec1[0], input.size(0))
-        top3.update(prec3[0], input.size(0))
+        prec1, prec3 = accuracy(output.data, target, topk=(1, 2))
+        losses.update(loss.item(), input.size(0))
+        top1.update(prec1.item(), input.size(0))
+        top3.update(prec3.item(), input.size(0))
 
         # measure elapsed time
         batch_time.update(time.time() - end)
@@ -301,8 +302,8 @@ def validate(val_loader, model, criterion):
     return top1.avg
 
 def save_checkpoint(state, is_best, filename, resume_path):
-    cur_path = os.path.join(resume_path, filename)
-    best_path = os.path.join(resume_path, 'model_best.pth.tar')
+    cur_path = os.path.join(resume_path, filename).replace("\\","/")
+    best_path = os.path.join(resume_path, 'model_best.pth.tar').replace("\\","/")
     torch.save(state, cur_path)
     if is_best:
         shutil.copyfile(cur_path, best_path)
@@ -344,7 +345,7 @@ def accuracy(output, target, topk=(1,)):
 
     res = []
     for k in topk:
-        correct_k = correct[:k].view(-1).float().sum(0)
+        correct_k = correct[:k].reshape(-1).float().sum(0)
         res.append(correct_k.mul_(100.0 / batch_size))
     return res
 
